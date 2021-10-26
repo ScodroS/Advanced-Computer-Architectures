@@ -16,7 +16,7 @@ void vectorAddKernel(const int* d_inputA,
     if(global_id < N) output[global_id] = d_inputA[global_id] + d_inputB[global_id];
 }
 
-const int N = 100000000;
+const int N = 1000000;
 
 int main(){
     Timer<DEVICE> TM_device;
@@ -75,8 +75,9 @@ int main(){
 
     vectorAddKernel<<<DimGrid,DimBlock>>>(d_inputA,d_inputB,N,d_output);
 
-    TM_device.stop();
     CHECK_CUDA_ERROR
+    TM_device.stop();
+
     TM_device.print("vectorAdd device: ");
 
     std::cout << std::setprecision(1)
