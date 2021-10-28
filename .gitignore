@@ -1,5 +1,7 @@
 # I
 *.i
+*/*/out/*
+.vs*
 *.ii
 *.gpu
 *.ptx
