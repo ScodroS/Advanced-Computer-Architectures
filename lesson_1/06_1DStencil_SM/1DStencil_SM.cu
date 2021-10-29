@@ -7,17 +7,61 @@
 using namespace timer;
 
 const int RADIUS = 7;
+const int THREADS_PER_BLOCK = 256;
+const int BLOCK_SIZE = THREADS_PER_BLOCK;
 
 __global__
-void stencilKernel(const int* d_input, int N,int* d_output) {
+void stencilKernel(const int* d_input, int N, int* d_output) {
+
+    __shared__ int d_sm[THREADS_PER_BLOCK + 2 * RADIUS];
     int global_id = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if(global_id < N-RADIUS && global_id >= RADIUS) {
-	    int sum = 0;
-	    for (int j = global_id - RADIUS; j <= global_id + RADIUS; j++)
-            	    sum += d_input[j];	
-	    d_output[global_id] = sum;
-	}
+    // all moved to the right of RADIUS
+    d_sm[threadIdx.x] = d_input[global_id];
+
+    // some threads will have to copy 2 more values to the shared memory (0-RADIUS and THREADS_PER_BLOCK+RADIUS)
+    if (threadIdx.x < RADIUS) {
+        d_sm[threadIdx.x + THREADS_PER_BLOCK] = d_input[blockDim.x + global_id];
+        d_sm[threadIdx.x + RADIUS + THREADS_PER_BLOCK] = d_input[global_id + RADIUS + blockDim.x];
+    }
+    // wait for the shared memory to be written by all threads before moving forward
+    __syncthreads();
+
+    // write the results in the output vector
+    if (global_id < N - 2 * RADIUS) {
+        int pvalue = 0;
+        for (int k = 0; k < RADIUS * 2 + 1; k++)
+            pvalue += d_sm[threadIdx.x + k];
+        d_output[global_id + RADIUS] = pvalue;
+    }
+}
+
+// https://www.olcf.ornl.gov/wp-content/uploads/2019/12/02-CUDA-Shared-Memory.pdf
+__global__ void stencilKernel2(const int* in, int N, int* out) {
+    
+    __shared__ int temp[BLOCK_SIZE + 2 * RADIUS];
+    int gindex = threadIdx.x + blockIdx.x * blockDim.x;
+    int lindex = threadIdx.x + RADIUS;
+    
+    // Read input elements into shared memory
+    temp[lindex] = in[gindex];
+    
+    if (threadIdx.x < RADIUS) {
+        temp[lindex - RADIUS] = in[gindex - RADIUS];
+        temp[lindex + BLOCK_SIZE] = in[gindex + BLOCK_SIZE];
+    }
+    
+    // Synchronize (ensure all the data is available)
+    __syncthreads();
+    
+    // Apply the stencil
+    int result = 0;
+    for (int offset = -RADIUS; offset <= RADIUS; offset++)
+        result += temp[lindex + offset];
+    
+    // Store the result
+    out[gindex] = result;
+
 }
 
 const int N  = 100000000;
@@ -64,18 +108,20 @@ int main() {
 
     // -------------------------------------------------------------------------
     // did you miss something?
-    dim3 DimGrid(N/256, 1, 1);
-    if (N%256) DimGrid.x++;
-    dim3 DimBlock(256, 1, 1);
+    dim3 DimGrid(N/THREADS_PER_BLOCK, 1, 1);
+    if (N%THREADS_PER_BLOCK) DimGrid.x++;
+    dim3 DimBlock(THREADS_PER_BLOCK, 1, 1);
 
     // -------------------------------------------------------------------------
     // DEVICE EXECUTION
     TM_device.start();
 
     stencilKernel<<<DimGrid, DimBlock>>>(d_input, N, d_output);
+    //stencilKernel2<<<DimGrid, DimBlock>>>(d_input, N, d_output);
 
     TM_device.stop();
     CHECK_CUDA_ERROR
+
     TM_device.print("1DStencil device: ");
 
     std::cout << std::setprecision(1)
@@ -85,7 +131,15 @@ int main() {
     // -------------------------------------------------------------------------
     // COPY DATA FROM DEVICE TO HOST
     SAFE_CALL( cudaMemcpy( h_output_tmp, d_output, N * sizeof(int), cudaMemcpyDeviceToHost ) )
-
+    /*
+    for (int i = 0; i < 20; i++) {
+        std::cout << h_output_tmp[i] << "\t";
+    }
+    std::cout << std::endl;
+    for (int i = 0; i < 20; i++) {
+        std::cout << h_output[i] << "\t";
+    }
+    */
     // -------------------------------------------------------------------------
     // RESULT CHECK
     for (int i = 0; i < N; i++) {

@@ -6,24 +6,41 @@
 #include "CheckError.cuh"
 using namespace timer;
 
-const int BLOCK_SIZE_X = 32;
-const int BLOCK_SIZE_Y = 32;
+const int BLOCK_SIZE = 32;
+const int TILE_WIDTH = BLOCK_SIZE;
 
 __global__
 void matrixMultiplicationKernel(const int* d_matrixA,
                                 const int* d_matrixB,
                                 int        N,
                                 int*       d_matrixC) {
-	int Row = blockIdx.y*blockDim.y + threadIdx.y;
-	int Col = blockIdx.x*blockDim.x + threadIdx.x;
-	int tmpval = 0;
-	for (int k = 0; k < N; ++k) {
-		tmpval += d_matrixA[Row*N+k] * d_matrixB[Col+k*N];	
-	}
-	d_matrixC[Row*N+Col] = tmpval;
+
+    __shared__ int ds_M[TILE_WIDTH][TILE_WIDTH];
+    __shared__ int ds_N[TILE_WIDTH][TILE_WIDTH];
+
+    // variables for readability of code
+    int bx = blockIdx.x; int by = blockIdx.y;
+    int tx = threadIdx.x; int ty = threadIdx.y;
+
+    // row and column of product matrix element to work on
+    int Row = by * TILE_WIDTH + ty;
+    int Col = bx * TILE_WIDTH + tx;
+    int Pvalue = 0;
+
+    // m is the phase number (1 tile per matrixA and 1 per matrixB per phase)
+    for (int m = 0; m < N / TILE_WIDTH; ++m) {
+        ds_M[ty][tx] = d_matrixA[Row * N + m * TILE_WIDTH + tx];
+        ds_N[ty][tx] = d_matrixB[Col + (m * TILE_WIDTH + ty) * N];
+        __syncthreads();
+        for (int k = 0; k < TILE_WIDTH; ++k)
+            Pvalue += ds_M[ty][k] * ds_N[k][tx];
+        __syncthreads();
+    }
+    d_matrixC[Row * N + Col] = Pvalue;
+
 }
 
-const int N = 2048;
+const int N = 1024;
 
 int main() {
     Timer<DEVICE> TM_device;
@@ -78,8 +95,8 @@ int main() {
 
     TM_device.start();
 
-    dim3 block_size( BLOCK_SIZE_X, BLOCK_SIZE_Y, 1 );
-    dim3 num_blocks( N/BLOCK_SIZE_X, N/BLOCK_SIZE_Y, 1 );
+    dim3 block_size( BLOCK_SIZE, BLOCK_SIZE, 1 );
+    dim3 num_blocks( N/BLOCK_SIZE, N/BLOCK_SIZE, 1 );
     matrixMultiplicationKernel<<< num_blocks, block_size >>>(d_matrixA, d_matrixB, N, d_matrixC);
 
     TM_device.stop();
@@ -96,6 +113,20 @@ int main() {
 
     // -------------------------------------------------------------------------
     // RESULT CHECK
+
+    /*
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            std::cout << h_matrix_tmp[i * N + j] << "\t";
+        }
+    }
+
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            std::cout << h_matrixC[i * N + j] << "\t";
+        }
+    }
+    */
 
     for (int i = 0; i < N * N; i++) {
         if (h_matrixC[i] != h_matrix_tmp[i]) {

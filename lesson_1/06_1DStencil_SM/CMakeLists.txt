@@ -1,4 +1,4 @@
-set(PROJECT "MatrixMultiplication_SM")
+set(PROJECT "1DStencil_SM")
 project(${PROJECT} CXX)
 
 cmake_minimum_required(VERSION 3.5)
@@ -28,4 +28,4 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 list(APPEND CUDA_NVCC_FLAGS "-arch=sm_62")
 list(APPEND CUDA_NVCC_FLAGS "-w")
 
-cuda_add_executable(matrix_mul_SM ${PROJECT_SOURCE_DIR}/MatrixMultiplication_SM.cu)
+cuda_add_executable(stencil_SM ${PROJECT_SOURCE_DIR}/1DStencil_SM.cu)
