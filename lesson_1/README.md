@@ -52,6 +52,7 @@ CPU time   | GPU time | Speedup  | Device             |
 ### Performance reference table (N = 1024):
 CPU time   | GPU time | Speedup  | Device             | Block size (=Tile width) |
 -----------| -------- | -------- | ------------------ | ------------------------ |
+2707 ms     | 4.5 ms  | 595x     | RTX 2060S          | 8                        |
 2700 ms     | 3 ms    | 992x     | RTX 2060S          | 16                       |
 2702 ms     | 3 ms    | 965x     | RTX 2060S          | 32                       |
 
@@ -62,4 +63,4 @@ CPU time   | GPU time | Speedup  | Device             | Block size (=Tile width)
 ### Performance reference table (N = 100 000 000):
 CPU time   | GPU time | Speedup  | Device             |
 -----------| -------- | -------- | ------------------ |
-894 ms     | 29 ms    | 29x     | RTX 2060S           | 
+ 2811ms    |  4ms     |  744x    |   RTX2060S         | 
