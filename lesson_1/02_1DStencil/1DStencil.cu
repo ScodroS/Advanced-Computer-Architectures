@@ -6,7 +6,7 @@
 #include "CheckError.cuh"
 using namespace timer;
 
-const int RADIUS = 7;
+const int RADIUS = 64;
 
 __global__
 void stencilKernel(const int* d_input, int N,int* d_output) {

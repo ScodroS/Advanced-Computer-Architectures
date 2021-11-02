@@ -6,7 +6,7 @@
 #include "CheckError.cuh"
 using namespace timer;
 
-const int RADIUS = 7;
+const int RADIUS = 64;
 const int THREADS_PER_BLOCK = 256;
 const int BLOCK_SIZE = THREADS_PER_BLOCK;
 

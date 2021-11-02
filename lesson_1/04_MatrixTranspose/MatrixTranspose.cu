@@ -6,8 +6,8 @@
 #include "CheckError.cuh"
 using namespace timer;
 
-const int BLOCK_SIZE_X = 16;
-const int BLOCK_SIZE_Y = 16;
+const int BLOCK_SIZE_X = 32;
+const int BLOCK_SIZE_Y = 32;
 
 __global__
 void matrixTransposeKernel(const int* d_matrix_in,

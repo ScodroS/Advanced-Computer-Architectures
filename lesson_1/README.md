@@ -24,7 +24,19 @@ CPU time   | GPU time | Speedup  | Mode |Device             |
 -----------| -------- | -------- | ---- |------------------ |
 13640 ms   | 92 ms    | 149x     | no_SM|Nvidia Jetson TX2  |
 2820 ms    | 4 ms     | 780x     | no_SM|RTX 2060S          |
- 
+2811 ms    | 4 ms     |  744x    |  SM  |RTX 2060S          | 
+
+### Performance reference table (N = 100 000 000, RADIUS=32, THREADS_PER_BLOCK=256):
+ CPU time  | GPU time| Speedup   | Mode |Device             |
+-----------| -------- | -------- | ---- |------------------ |
+13159 ms   | 11 ms    | 1232x    | no_SM|RTX 2060S          |
+13188 ms   | 10 ms    | 1332x    |  SM  |RTX 2060S          | 
+
+### Performance reference table (N = 100 000 000, RADIUS=64, THREADS_PER_BLOCK=256):
+ CPU time  | GPU time| Speedup   | Mode |Device             |
+-----------| -------- | -------- | ---- |------------------ |
+27770 ms   | 21 ms    | 1351x    | no_SM|RTX 2060S          |
+27722 ms   | 18 ms    | 1549x    |  SM  |RTX 2060S          | 
 
 ## 03. MatrixMultiplication
 
@@ -42,7 +54,8 @@ CPU time   | GPU time | Speedup  | Mode   |   Device          |
 CPU time   | GPU time | Speedup  | Mode   |   Device          |
 -----------| -------- | -------- | -------| ----------------- |
 466817 ms  | 217 ms   | 2155x    | SM     |Nvidia Jetson TX2  |
--          | -        | -        | -      |RTX2060S           |
+65770 ms   | 26ms     | 2488x    | no_SM  |RTX 2060S          |
+59621 ms   | 21ms     | 2799x    | SM     |RTX 2060S          |
 
 ## 04. MatrixTranspose
 
@@ -52,19 +65,11 @@ CPU time   | GPU time | Speedup  | Mode   |   Device          |
 CPU time   | GPU time  | Speedup  | Mode      | Device            |
 -----------| --------- | -------- | --------- |------------------ |
 5474 ms    | 65 ms     | 82x      | no_SM     |Nvidia Jetson TX2  |
-2.8 ms     | <0.1 ms   | 64.2x    | no_SM     |RTX 2060S          | 
+2.8 ms     | <0.1 ms   | 64x      | no_SM     |RTX 2060S          | 
 
 ### Performance reference table (N = 8192, BLOCK_SIZE = 32x32):
 CPU time   | GPU time  | Speedup  | Mode      | Device            |
 -----------| --------- | -------- | --------- |------------------ |
 5474 ms    | 65 ms     | 82x      | SM        |Nvidia Jetson TX2  |
--          | -         | -        | -         |RTX 2060S          | 
-
-## 06. 1DStencil (with shared memory optimization)
-
-<img src="https://github.com/PARCO-LAB/Advanced-Computer-Architectures/blob/main/figures/l1_02.jpg" width="500" height=auto> 
-
-### Performance reference table (N = 100 000 000):
-CPU time   | GPU time | Speedup  | Device             |
------------| -------- | -------- | ------------------ |
- 2811ms    |  4ms     |  744x    |   RTX2060S         | 
+743 ms     | 6 ms      | 132x     | no_SM     |RTX 2060S          |
+750 ms     | 4 ms      | 183x     | SM        |RTX 2060S          | 

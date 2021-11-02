@@ -6,8 +6,8 @@
 #include "CheckError.cuh"
 using namespace timer;
 
-const int BLOCK_SIZE_X = 16;
-const int BLOCK_SIZE_Y = 16;
+const int BLOCK_SIZE_X = 32;
+const int BLOCK_SIZE_Y = 32;
 
 __global__
 void matrixMultiplicationKernel(const int* d_matrixA,
@@ -23,7 +23,7 @@ void matrixMultiplicationKernel(const int* d_matrixA,
 	d_matrixC[Row*N+Col] = tmpval;
 }
 
-const int N = 1024;
+const int N = 2048;
 
 int main() {
     Timer<DEVICE> TM_device;
