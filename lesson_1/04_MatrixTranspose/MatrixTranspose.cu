@@ -19,7 +19,7 @@ void matrixTransposeKernel(const int* d_matrix_in,
     d_matrix_out[Col * N + Row] = d_matrix_in[Row * N + Col];
 }
 
-const int N  = 1024;
+const int N  = 8192;
 
 int main() {
     Timer<DEVICE> TM_device;

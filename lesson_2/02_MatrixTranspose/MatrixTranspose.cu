@@ -6,7 +6,7 @@
 #include "CheckError.cuh"
 using namespace timer;
 
-const int TILE_WIDTH = 32;
+const int TILE_WIDTH = 16;
 const int BLOCK_SIZE = TILE_WIDTH;
 
 __global__
@@ -16,15 +16,24 @@ void matrixTransposeKernel(const int* d_matrix_in,
 	__shared__ int ds_M[TILE_WIDTH][TILE_WIDTH];
 
 	// row and column of product matrix element to work on
-	int Row = blockIdx.y * TILE_WIDTH + threadIdx.y;
-	int Col = blockIdx.x * TILE_WIDTH + threadIdx.x;
-	
-	ds_M[threadIdx.y][threadIdx.x] = d_matrix_in[Row * N + Col];
-	__syncthreads();
-	d_matrix_out[Row * N + Col] = ds_M[threadIdx.x][threadIdx.y];
+	int Row = blockIdx.y * blockDim.y + threadIdx.y;
+	int Col = blockIdx.x * blockDim.x + threadIdx.x;
+	if (Col < N && Row < N) {
+
+		ds_M[threadIdx.y][threadIdx.x] = d_matrix_in[Row * N + Col];
+
+		__syncthreads();
+
+		Col = blockIdx.y * blockDim.y + threadIdx.x;
+		Row = blockIdx.x * blockDim.y + threadIdx.y;
+
+		d_matrix_out[Row*N+Col] = ds_M[threadIdx.x][threadIdx.y]; 
+		
+		// d_matrix_out[Col * N + Row] = ds_M[threadIdx.y][threadIdx.x];
+	}
 }
 
-const int N  = 1024;
+const int N  = 8192;
 
 int main() {
     Timer<DEVICE> TM_device;
