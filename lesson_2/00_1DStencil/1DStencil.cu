@@ -36,8 +36,6 @@ void stencilKernel(const int* d_input, int N, int* d_output) {
     }
 }
 
-
-
 const int N  = 100000000;
 
 int main() {

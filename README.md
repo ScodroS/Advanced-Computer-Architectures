@@ -59,3 +59,21 @@ Then launch the benchmarking script in the build folder:
 ```bash
 ../../../utils/benchmark.sh <executable_name>
 ```
+
+If you are using a Jetson board, make sure to set the power profile to max, typing:
+```bash
+sudo nvpmodel -m<n> # (The number may change, depending on the device, for TX2 <n>=0)
+sudo jetson_clocks
+```
+
+## Hardware details
+To have a complete overview of the Jetson hardware status, type:
+```bash
+sudo jtop
+```
+
+If it isn't already installed, type:
+```bash
+sudo -H pip3 install -U jetson-stats
+sudo systemctl restart jetson_stats.service
+```
