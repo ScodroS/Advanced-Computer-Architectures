@@ -8,18 +8,20 @@ Starting from the idea of [@micheleboldo](https://github.com/micheleboldo), the 
 ### Performance reference table (N = 16777216):
 CPU time   | GPU time | Speedup  | Device             | Mode  |Author
 -----------| -------- | -------- | ------------------ | ----  |------
-73 ms   | 21 ms    | 3x      | Nvidia Jetson TX2  | Shared Divergence | -
-73 ms   | 12 ms    | 5x      | Nvidia Jetson TX2  | Shared Less Divergence | -
+73 ms	| 27	   | 2.8x    | Nvidia Jetson TX2  | Parallel w/o shared mem  | -
+73 ms   | 23 ms    | 3x      | Nvidia Jetson TX2  | Shared Divergence | -
+73 ms   | 13 ms    | 6x      | Nvidia Jetson TX2  | Shared Less Divergence | -
+73 ms	| 27	   | 2.8x    | Nvidia Jetson TX2  | Parallel with Task parallelism w/o shared mem  | -
 73 ms   | 9 ms     | 7x      | Nvidia Jetson TX2  | Last Warp Opt | -
 73 ms   | 5 ms     | 13x     | Nvidia Jetson TX2  | Custom | [@micheleboldo](https://github.com/micheleboldo)
-73 ms   | 3 ms     | **24x**     | Nvidia Jetson TX2  | Custom | [@xaldyz](https://github.com/xaldyz)
+73 ms   | 3 ms     | **24x** | Nvidia Jetson TX2  | Custom | [@xaldyz](https://github.com/xaldyz)
 
 ### Performance reference table - Other Devices (N = 16777216):
 CPU time   | GPU time | Speedup  | Device             | Mode  |Author
 -----------| -------- | -------- | ------------------ | ----  |------
 32.9 ms   | 3.8 ms    | 8.7x     | i7 6700K, GTX 1060 (6GB) | Shared Divergence | [@micheleboldo](https://github.com/micheleboldo)
 33.4 ms   | 2.1 ms    | 3.5x     | i7 6700K, GTX 1060 (6GB)  | Shared Less Divergence | [@micheleboldo](https://github.com/micheleboldo)
-33.3 ms   | 0.9 ms    | 13x     | i7 6700K, GTX 1060 (6GB)  | Custom | [@micheleboldo](https://github.com/micheleboldo)
+33.3 ms   | 0.9 ms    | 13x      | i7 6700K, GTX 1060 (6GB)  | Custom | [@micheleboldo](https://github.com/micheleboldo)
 
 ## 01. Prefix Scan
 
