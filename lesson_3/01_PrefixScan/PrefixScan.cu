@@ -2,6 +2,7 @@
 #include <chrono>
 #include <random>
 #include <numeric>
+#include <math.h>
 #include "Timer.cuh"
 
 using namespace timer;
@@ -9,13 +10,23 @@ using namespace timer_cuda;
 
 const int BLOCK_SIZE = 512;
 
-__global__ void PrefixScan(int* VectorIN, int N) {
-	
+__device__ int counter = 0;
+
+__global__ void PrefixScan(int* VectorIN, int N, int levels) {
+	int global_id = blockIdx.x * blockDim.x + threadIdx.x;
+	int offset = 1;
+	for ( int level = 0; level < levels; level++ ) {
+		if ( level > 0 )
+			offset *= 2;
+		if ( global_id >= offset )
+			VectorIN[global_id] = VectorIN[global_id - offset] + VectorIN[global_id];
+		__syncthreads();
+	}
 }
 
-void printArray(int* Array, int N, const char str[] = "") {
+void printArray(int* Array, int start, int end, const char str[] = "") {
 	std::cout << str;
-	for (int i = 0; i < N; ++i)
+	for (int i = start; i < end; ++i)
 		std::cout << std::setw(5) << Array[i] << ' ';
 	std::cout << std::endl << std::endl;
 }
@@ -25,7 +36,10 @@ void printArray(int* Array, int N, const char str[] = "") {
 
 int main() {
 	const int blockDim = BLOCK_SIZE;
-	const int N = BLOCK_SIZE * 131072;
+	// const int N = BLOCK_SIZE * 131072;
+	const int N = BLOCK_SIZE * 8;
+	const int levels = log2(N);
+	std::cout << "Levels: " << levels << std::endl;
 
 
     // ------------------- INIT ------------------------------------------------
@@ -48,7 +62,7 @@ int main() {
 
 	int* devVectorIN;
 	__SAFE_CALL( cudaMalloc(&devVectorIN, N * sizeof(int)) );
-    __SAFE_CALL( cudaMemcpy(devVectorIN, VectorIN, N * sizeof(int), cudaMemcpyHostToDevice) );
+  __SAFE_CALL( cudaMemcpy(devVectorIN, VectorIN, N * sizeof(int), cudaMemcpyHostToDevice) );
 
 	int* prefixScan = new int[N];
 	float dev_time;
@@ -56,7 +70,7 @@ int main() {
 	// ------------------- CUDA COMPUTATION 1 ----------------------------------
 
 	dev_TM.start();
-	PrefixScan<<<DIV(N, blockDim), blockDim>>>(devVectorIN, N);
+	PrefixScan<<<DIV(N, blockDim), blockDim>>>(devVectorIN, N, levels);
 	dev_TM.stop();
 	dev_time = dev_TM.duration();
 
@@ -70,12 +84,19 @@ int main() {
 
 	// ------------------- VERIFY ----------------------------------------------
 
-    host_TM.start();
+  host_TM.start();
 
 	int* host_result = new int[N];
 	std::partial_sum(VectorIN, VectorIN + N, host_result);
 
-    host_TM.stop();
+  host_TM.stop();
+    
+  const char str[] = "";
+  int start = BLOCK_SIZE * 1 -10;
+  int end = BLOCK_SIZE * 1 + 10;
+    
+  printArray(prefixScan, start, end, str);
+  printArray(host_result, start, end, str);
 
 	if (!std::equal(host_result, host_result + blockDim - 1, prefixScan + 1)) {
 		std::cerr << " Error! :  prefixScan" << std::endl << std::endl;

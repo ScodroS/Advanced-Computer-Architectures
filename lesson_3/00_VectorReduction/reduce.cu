@@ -10,11 +10,14 @@ using namespace timer;
 // Macros
 #define DIV(a, b)   (((a) + (b) - 1) / (b))
 
-const int N  = 16777216;
+const int N  = 16777216; // 2^24
 const bool TASK_PARALLELISM = 1;
-const int SegSize = 8192*2*2*2;
-#define BLOCK_SIZE 256
 
+#define BLOCK_SIZE 256
+const int SegSize = BLOCK_SIZE * BLOCK_SIZE;
+
+
+// standard version (global memory only)
 __global__ void ReduceKernel0(int* VectorIN, int N) {
     
 	int GlobalIndex = blockIdx.x * blockDim.x + threadIdx.x;
@@ -28,6 +31,7 @@ __global__ void ReduceKernel0(int* VectorIN, int N) {
 		VectorIN[blockIdx.x] = VectorIN[GlobalIndex];
 }
 
+// standard version with shared memory
 __global__ void ReduceKernel1(int* VectorIN, int N) {
     
 	__shared__ int SMem[1024];
@@ -43,6 +47,7 @@ __global__ void ReduceKernel1(int* VectorIN, int N) {
 		VectorIN[blockIdx.x] = SMem[0];
 }
 
+// second version (shared memory + multiple of warp size)
 __global__ void ReduceKernel2(int* VectorIN, int N) {
     
     __shared__ int SMem[1024];
@@ -65,6 +70,26 @@ __global__ void ReduceKernel2(int* VectorIN, int N) {
 
 }
 
+// <<DIV(N, SegSize), BLOCK_SIZE, 0, stream0>>>
+
+__global__ void FinalSumKernel(int* VectorIN, int N) {
+
+	int GlobalIndex = blockIdx.x * blockDim.x + threadIdx.x;
+	
+	VectorIN[GlobalIndex] = VectorIN[GlobalIndex * SegSize];
+
+	__syncthreads();
+	
+	for (int i = 1; i < blockDim.x; i *= 2) {
+		if (threadIdx.x % (i * 2) == 0)
+			VectorIN[GlobalIndex] += VectorIN[GlobalIndex + i];
+		__syncthreads();
+	}
+	if (threadIdx.x == 0)
+		VectorIN[blockIdx.x] = VectorIN[GlobalIndex];
+}
+
+// same as 2 for now...
 __global__ void ReduceKernel3(int* VectorIN, int N) {
     
     __shared__ int SMem[1024];
@@ -110,16 +135,17 @@ int main() {
 	int* devVectorIN;
 	SAFE_CALL( cudaMalloc(&devVectorIN, N * sizeof(int)) );
 	
-	SAFE_CALL( cudaMemcpy(devVectorIN, VectorIN, N * sizeof(int),
-                 cudaMemcpyHostToDevice) );
-	
-	int sum;
+	int sum = 0;
 	float dev_time;
 
 	// ------------------- CUDA COMPUTATION 1 ----------------------------------
 
     std::cout<<"Starting computation on DEVICE "<<std::endl;
 	if (!TASK_PARALLELISM) {
+	
+		SAFE_CALL( cudaMemcpy(devVectorIN, VectorIN, N * sizeof(int),
+       cudaMemcpyHostToDevice) );
+	
 		dev_TM.start();
 
 		ReduceKernel2<<<DIV(N, BLOCK_SIZE), BLOCK_SIZE>>>
@@ -130,6 +156,10 @@ int main() {
 				 (devVectorIN, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
 
 		dev_TM.stop();
+		
+		SAFE_CALL( cudaMemcpy(&sum, devVectorIN, sizeof(int),
+          cudaMemcpyDeviceToHost) );
+		
 		dev_time = dev_TM.duration();
 		CHECK_CUDA_ERROR;
 	}
@@ -139,40 +169,39 @@ int main() {
 		cudaStreamCreate(&stream0);
 		cudaStreamCreate(&stream1);
 
-		int* d_A0; // device memory for stream 0
-		int* d_A1; // device memory for stream 1
-
-		SAFE_CALL( cudaMalloc( &d_A0, N * sizeof(int) ));
-		SAFE_CALL( cudaMalloc( &d_A1, N * sizeof(int) ));
-
-		host_TM.start();
+		/// N = 2^24
+		/// BLOCK_SIZE = 2^8
+		
+		int* VectorINtmp = new int[N];
+		
+		// SAFE_CALL( cudaMemcpy(devVectorIN, VectorIN, N * sizeof(int), cudaMemcpyHostToDevice) );
+		
+		dev_TM.start();
 
 		for (int i = 0; i < N; i += SegSize * 2) {
+			
+			SAFE_CALL( cudaMemcpyAsync( devVectorIN + i, VectorIN + i, SegSize * sizeof(int), cudaMemcpyHostToDevice, stream0 ));
+			SAFE_CALL( cudaMemcpyAsync( devVectorIN + i + SegSize, VectorIN + i + SegSize, SegSize * sizeof(int), cudaMemcpyHostToDevice, stream1 ));
 
-			cudaMemcpyAsync(d_A0, devVectorIN + i, SegSize * sizeof(int), cudaMemcpyHostToDevice, stream0);
-			cudaMemcpyAsync(d_A1, devVectorIN + i + SegSize, SegSize * sizeof(int), cudaMemcpyHostToDevice, stream1);
-
-			ReduceKernel0<<<DIV(N, BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>>
-					(d_A0, N);
-			ReduceKernel0<<<DIV(N, BLOCK_SIZE* BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>>
-					(d_A0, DIV(N, BLOCK_SIZE));
-			ReduceKernel0<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>>
-					(d_A0, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
-			ReduceKernel0<<<DIV(N, BLOCK_SIZE), BLOCK_SIZE, 0, stream1>>>
-					(d_A1, N);
-			ReduceKernel0<<<DIV(N, BLOCK_SIZE* BLOCK_SIZE), BLOCK_SIZE, 0, stream1>>>
-					(d_A1, DIV(N, BLOCK_SIZE));
-			ReduceKernel0<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE, 0, stream1>>>
-					(d_A1, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
+			ReduceKernel0<<<DIV(SegSize, BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>> (devVectorIN + i, SegSize);
+			ReduceKernel0<<<DIV(SegSize, BLOCK_SIZE), BLOCK_SIZE, 0, stream1>>> (devVectorIN + i + SegSize, SegSize);
+			ReduceKernel0<<<DIV(SegSize, BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>> (devVectorIN + i, DIV(SegSize, BLOCK_SIZE));
+			ReduceKernel0<<<DIV(SegSize, BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE, 0, stream1>>> (devVectorIN + i + SegSize, DIV(SegSize, BLOCK_SIZE));
+			
 		}
+		
+		//cudaStreamSynchronize(stream1);
+		FinalSumKernel<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>> (devVectorIN, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
+		
+		FinalSumKernel<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE>>> (devVectorIN, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
 
-		CHECK_CUDA_ERROR
-
-		host_TM.stop();
+		dev_TM.stop();
+		
+		SAFE_CALL( cudaMemcpy(&sum, devVectorIN, sizeof(int), cudaMemcpyDeviceToHost) );
+		
+		dev_time = dev_TM.duration();
+		CHECK_CUDA_ERROR;
 	}
-
-	SAFE_CALL( cudaMemcpy(&sum, devVectorIN, sizeof(int),
-		            cudaMemcpyDeviceToHost) );
 
 	// ------------------- HOST ------------------------------------------------
     host_TM.start();
