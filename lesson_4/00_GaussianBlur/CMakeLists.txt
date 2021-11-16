@@ -3,6 +3,7 @@ project(${PROJECT} CXX)
 
 cmake_minimum_required(VERSION 3.5)
 FIND_PACKAGE(CUDA REQUIRED)
+FIND_PACKAGE(OpenCV REQUIRED)
 
 message("\nTest on cmake v" ${CMAKE_VERSION} "  System: " ${CMAKE_SYSTEM} "\n")
 
@@ -29,3 +30,4 @@ list(APPEND CUDA_NVCC_FLAGS "-arch=sm_62")
 list(APPEND CUDA_NVCC_FLAGS "-w")
 
 cuda_add_executable(gaussian_blur ${PROJECT_SOURCE_DIR}/GaussianBlur.cu)
+target_link_libraries(gaussian_blur ${OpenCV_LIBS})
