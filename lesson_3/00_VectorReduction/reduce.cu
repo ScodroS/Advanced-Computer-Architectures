@@ -112,7 +112,7 @@ __global__ void ReduceKernel3(int* VectorIN, int N) {
 
 }
 
-int main() {
+int main() { {
     
     // ------------------- INIT ------------------------------------------------
 
@@ -190,10 +190,9 @@ int main() {
 			
 		}
 		
-		//cudaStreamSynchronize(stream1);
-		FinalSumKernel<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>> (devVectorIN, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
+		cudaStreamSynchronize(stream1);
 		
-		FinalSumKernel<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE>>> (devVectorIN, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
+		FinalSumKernel<<<DIV(N, BLOCK_SIZE * BLOCK_SIZE * BLOCK_SIZE), BLOCK_SIZE, 0, stream0>>> (devVectorIN, DIV(N, BLOCK_SIZE * BLOCK_SIZE));
 
 		dev_TM.stop();
 		
@@ -237,6 +236,6 @@ int main() {
     std::cout << host_TM.duration() << ";" << dev_TM.duration() << ";" << host_TM.duration() / dev_TM.duration() << std::endl;
 
     delete[] VectorIN;
-    SAFE_CALL( cudaFree(devVectorIN) );
+    SAFE_CALL( cudaFree(devVectorIN) ); }
     cudaDeviceReset();
 }

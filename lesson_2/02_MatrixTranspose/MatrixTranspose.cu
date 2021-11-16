@@ -10,7 +10,7 @@ const int TILE_WIDTH = 32;
 const int BLOCK_SIZE = TILE_WIDTH;
 
 __global__
-void matrixTransposeKernel(const int* d_matrix_in,
+void matrixTransposeKernel0(const int* d_matrix_in,
                            int        N,
                            int*       d_matrix_out) {
 	__shared__ int ds_M[TILE_WIDTH][TILE_WIDTH];
@@ -32,7 +32,7 @@ void matrixTransposeKernel(const int* d_matrix_in,
 }
 
 __global__
-void matrixTransposeKernel2(const int* d_matrix_in,
+void matrixTransposeKernel1(const int* d_matrix_in,
     int        N,
     int* d_matrix_out) {
     __shared__ int ds_M[TILE_WIDTH][TILE_WIDTH];
@@ -99,7 +99,7 @@ int main() {
 
     TM_device.start();
 	
-    matrixTransposeKernel2<<< num_blocks, block_size>>>(d_matrix_in, N, d_matrix_out);
+    matrixTransposeKernel1<<< num_blocks, block_size>>>(d_matrix_in, N, d_matrix_out);
 
     TM_device.stop();
     CHECK_CUDA_ERROR
