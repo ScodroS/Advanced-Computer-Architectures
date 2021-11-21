@@ -3,7 +3,8 @@ project(${PROJECT} CXX)
 
 cmake_minimum_required(VERSION 3.5)
 FIND_PACKAGE(CUDA REQUIRED)
-FIND_PACKAGE(OpenCV REQUIRED)
+# FIND_PACKAGE(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED PATHS ${PROJECT_SOURCE_DIR}/../../../opencv/build/ NO_DEFAULT_PATH) 
 
 message("\nTest on cmake v" ${CMAKE_VERSION} "  System: " ${CMAKE_SYSTEM} "\n")
 
@@ -25,9 +26,14 @@ endif()
 # ------------------------------------------------------------------------------
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(${OpenCV_INCLUDE_DIRS})
 
 list(APPEND CUDA_NVCC_FLAGS "-arch=sm_62")
 list(APPEND CUDA_NVCC_FLAGS "-w")
 
 cuda_add_executable(gaussian_blur ${PROJECT_SOURCE_DIR}/GaussianBlur.cu)
-target_link_libraries(gaussian_blur ${OpenCV_LIBS})
+if (EXISTS ${PROJECT_SOURCE_DIR}/../../../opencv/*lib*)
+	target_link_libraries(gaussian_blur ${PROJECT_SOURCE_DIR}/../../../opencv/build/lib/)
+else()
+	target_link_libraries(gaussian_blur ${OpenCV_LIBS})
+endif()
