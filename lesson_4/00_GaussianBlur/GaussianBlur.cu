@@ -9,7 +9,7 @@
 using namespace timer;
 
 // N is the mask width / height (square mask)
-const int N = 5;
+const int N = 17;
 #define WIDTH 1000
 #define HEIGHT 500
 #define CHANNELS 3
@@ -17,9 +17,11 @@ const int N = 5;
 const int BLOCK_SIZE = 32;
 const int TILE_WIDTH = BLOCK_SIZE;
 
+// print NxN sub-matrix (with first element in [0][0]) of 'Image' of width 'width' and channels 'channels'
 template <class T>
-void print5by5 (T* Image);
-void createMask (float* Mask);
+void printNbyN (T* Image, int N, int width, int channels);
+// create a Mask NxN given a certain weight sigma 
+void createMask (float* Mask, int N, float sigma);
 
 __global__
 void GaussianBlurDevice(const unsigned char *image, 
@@ -103,14 +105,20 @@ int main() {
 	unsigned char *Image  = new unsigned char[WIDTH * HEIGHT * CHANNELS];
 	unsigned char *Image_out = new unsigned char[WIDTH * HEIGHT * CHANNELS];
 	unsigned char *hostImage_out = new unsigned char[WIDTH * HEIGHT * CHANNELS];
+	float sigma;
+	float *Mask = new float[N*N]; 
 	
 	Image = I.data;
+	sigma = 3.0;
+	/*
 	float Mask [] = { 1.0,   4.0,  67.0,  4.0,  1.0,
        						  4.0,  16.0,  26.0, 16.0,  4.0,
        						  7.0,  26.0,  41.0, 26.0,  7.0,
        						  4.0,  16.0,  26.0, 16.0,  4.0,
        						  1.0,   4.0,  67.0,  4.0,  1.0 };
-  createMask(Mask);  
+  */   						  
+  createMask(Mask, N, sigma);  
+  printNbyN(Mask, N, N, 1);
 	
 	std::cout << std::endl;
 	for(int i=0; i<5; i++) {
@@ -174,7 +182,7 @@ int main() {
 	// -------------------------------------------------------------------------
 	// COPY DATA FROM DEVICE TO HOST
 
-	SAFE_CALL( cudaMemcpy( hostImage_out, devImage_out, N * N * sizeof(unsigned char), cudaMemcpyDeviceToHost ) );
+	SAFE_CALL( cudaMemcpy( hostImage_out, devImage_out, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char), cudaMemcpyDeviceToHost ) );
 
 	// -------------------------------------------------------------------------
 	// RESULT CHECK
@@ -210,14 +218,14 @@ int main() {
 }
 
 template <class T>
-void print5by5 (T* Image) {
+void printNbyN (T* Image, int N, int width, int channels) {
 	std::cout << std::endl;
-	for(int i=0; i<5; i++) {
-		for(int j=0; j<5; j++) {
+	for(int i=0; i<N; i++) {
+		for(int j=0; j<N; j++) {
 			std::cout << "[ ";
-			for(int k=0; k<CHANNELS; k++) {
-				std::cout << (short)Image[(i*WIDTH+j)*CHANNELS+k];
-				k == CHANNELS-1? std::cout << " ": std::cout << " , "; 
+			for(int k=0; k<channels; k++) {
+				std::cout << Image[(i*width+j)*channels+k];
+				k == channels-1? std::cout << " ": std::cout << " , "; 
 			}
 			std::cout << "]";
 		}		
@@ -227,10 +235,20 @@ void print5by5 (T* Image) {
 }
 
 // Just to calculate the mask
-void createMask (float* Mask) {
+// sigma 5.5
+void createMask (float* Mask, int N, float sigma) {
+
+	/*
 	for(int i=0; i<N; i++) {
 		for(int j=0; j<N; j++) {
 			Mask[i*N+j] = 1.0/273 * Mask[i*N+j];
+		}
+	}
+	*/
+	
+	for(int i=0; i<N; i++) {
+		for(int j=0; j<N; j++) {
+			Mask[i*N+j] = 1 / ( 2 * M_PI * pow( sigma, 2 ) ) * exp( -( pow( abs( N / 2 - i ), 2 ) + pow( abs( N / 2 - j ), 2 ) ) / ( 2 * pow( sigma, 2 ) ) );
 		}
 	}
 }
