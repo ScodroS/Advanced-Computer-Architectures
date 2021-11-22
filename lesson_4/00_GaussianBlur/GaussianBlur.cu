@@ -46,7 +46,9 @@ void GaussianBlurDevice(const unsigned char *image,
 						pixel_value += mask[v*N+u]*image[(new_y*WIDTH+new_x)*CHANNELS+channel];
 					}
 				}
-				image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]=(unsigned char) (pixel_value < 255.0? pixel_value : 255.0);
+				// previous solution due to fixed discrete filter mask
+				// image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]=(unsigned char) (pixel_value < 255.0? pixel_value : 255.0);
+				image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]=(unsigned char) pixel_value ;
 			}
 			//no transparency
 			//image_out[(y*WIDTH+x)*CHANNELS+CHANNELS-1]=(unsigned char) 255;
@@ -71,8 +73,9 @@ void GaussianBlurHost(const unsigned char *image,
 						pixel_value += mask[v*N+u]*image[(new_y*WIDTH+new_x)*CHANNELS+channel];
 					}
 				}
-				// temporary solution, need new filter mask...
-				image_out[(y*WIDTH+x)*CHANNELS+channel]=(unsigned char) (pixel_value < 255.0? pixel_value : 255.0);
+				// previous solution due to fixed discrete filter mask
+				// image_out[(y*WIDTH+x)*CHANNELS+channel]=(unsigned char) (pixel_value < 255.0? pixel_value : 255.0);
+				image_out[(y*WIDTH+x)*CHANNELS+channel]=(unsigned char) pixel_value ;
 			}
 			//no transparency
 			//image_out[(y*WIDTH+x)*CHANNELS+CHANNELS-1]=(unsigned char) 255;
@@ -118,18 +121,8 @@ int main() {
        						  1.0,   4.0,  67.0,  4.0,  1.0 };
   */   						  
   createMask(Mask, N, sigma);  
-  printNbyN(Mask, N, N, 1);
-	
-	std::cout << std::endl;
-	for(int i=0; i<5; i++) {
-		for(int j=0; j<5; j++) {
-			std::cout << "[ ";
-			std::cout << Mask[i*N+j];
-			std::cout << "]";
-		}		
-		std::cout << std::endl;
-	}
-	std::cout << std::endl;
+  
+  // printNbyN(Mask, N, N, 1);
 	
 	// -------------------------------------------------------------------------
 	// HOST EXECUTIION
@@ -192,19 +185,26 @@ int main() {
 	cv::imshow("Result of gaussian blur (device)", B);
 	cv::waitKey(0);
 	
-	if (true /* Correct check here */) {
-	std::cerr << "wrong result!" << std::endl;
-	cudaDeviceReset();
-	std::exit(EXIT_FAILURE);
+	// GPU and CPU different precision for floating point operations ???
+	for( int i = 0 ; i < HEIGHT ; i++ ) {
+		for ( int j = 0 ; j < WIDTH ; j++) {
+			// if (hostImage_out[i*WIDTH+j] != Image_out[i*WIDTH+j]) {
+			if (hostImage_out[i*WIDTH+j] < Image_out[i*WIDTH+j]-1 || hostImage_out[i*WIDTH+j] > Image_out[i*WIDTH+j]+1 ) {
+					std::cerr << "wrong result at ["<< i <<"][" << j << "]!" << std::endl;
+					std::cerr << "Image_out: " << (short)Image_out[i*WIDTH+j] << std::endl;
+					std::cerr << "devImage_out: " << (short)hostImage_out[i*WIDTH+j] << std::endl;
+					cudaDeviceReset();
+					std::exit(EXIT_FAILURE);
+			}
+		}
 	}
 	std::cout << "<> Correct\n\n";
 
 	// -------------------------------------------------------------------------
 	// HOST MEMORY DEALLOCATION
-  delete[] Image;
+  // "delete[] Image", "delete[] A", "delete[] B" not needed as they are in the stack, not heap;
   delete[] Image_out;
   delete[] hostImage_out;
-
 
 	// -------------------------------------------------------------------------
 	// DEVICE MEMORY DEALLOCATION
