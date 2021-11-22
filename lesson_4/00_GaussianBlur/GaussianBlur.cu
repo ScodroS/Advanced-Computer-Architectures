@@ -14,17 +14,46 @@ const int N = 5;
 #define HEIGHT 500
 #define CHANNELS 3
 
+const int BLOCK_SIZE = 32;
+const int TILE_WIDTH = BLOCK_SIZE;
 
 template <class T>
 void print5by5 (T* Image);
 void createMask (float* Mask);
 
 __global__
-void GaussianBlurDevice() {
+void GaussianBlurDevice(const unsigned char *image, 
+												const float *mask, 
+												unsigned char *image_out,
+												int N) {
 
+	int globalId_x = threadIdx.x + blockIdx.x * blockDim.x;
+	int globalId_y = threadIdx.y + blockIdx.y * blockDim.y;
+	// globalId_z = threadIdx.z + blockIdx.z * blockDim.z;
+
+	if (globalId_x < WIDTH && globalId_y < HEIGHT) {
+			// *CHANNELS = number of channels codified into a pixel (4 in this case, RGBA)
+			//for(int channel = 0; channel < CHANNELS-1; channel++){
+			for(int channel = 0; channel < CHANNELS; channel++){
+				float pixel_value = 0;
+				// N is the length of mask edge
+				for(int u = 0; u < N; u++) {
+					for(int v = 0; v < N; v++) {
+						int new_x = min(WIDTH, max(0, globalId_x+u-N/2));
+						int new_y = min(HEIGHT, max(0, globalId_y+v-N/2));
+						pixel_value += mask[v*N+u]*image[(new_y*WIDTH+new_x)*CHANNELS+channel];
+					}
+				}
+				image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]=(unsigned char) (pixel_value < 255.0? pixel_value : 255.0);
+			}
+			//no transparency
+			//image_out[(y*WIDTH+x)*CHANNELS+CHANNELS-1]=(unsigned char) 255;
+	}
 }
 
-void GaussianBlurHost(unsigned char* image, float* mask, unsigned char* image_out) {
+void GaussianBlurHost(const unsigned char *image, 
+											const float *mask, 
+											unsigned char *image_out) {
 
 	for(int y = 0; y < HEIGHT; y++) {
 		for(int x = 0; x < WIDTH; x++) {
@@ -47,7 +76,6 @@ void GaussianBlurHost(unsigned char* image, float* mask, unsigned char* image_ou
 			//image_out[(y*WIDTH+x)*CHANNELS+CHANNELS-1]=(unsigned char) 255;
 		}
 	}
-	print5by5(image_out);
 }
 
 int main() {
@@ -65,8 +93,6 @@ int main() {
 		exit(0);
 		// stop execution
 	}
-	
-	print5by5(I.data);
 
 	cv::namedWindow("Display window");// Create a window for display.
 	cv::imshow( "Display window", I ); 
@@ -74,8 +100,9 @@ int main() {
 
 	// -------------------------------------------------------------------------
 	// HOST MEMORY ALLOCATION
-	unsigned char* Image  = new unsigned char[WIDTH * HEIGHT * CHANNELS];
-	unsigned char* Image_out = new unsigned char[WIDTH * HEIGHT * CHANNELS];
+	unsigned char *Image  = new unsigned char[WIDTH * HEIGHT * CHANNELS];
+	unsigned char *Image_out = new unsigned char[WIDTH * HEIGHT * CHANNELS];
+	unsigned char *hostImage_out = new unsigned char[WIDTH * HEIGHT * CHANNELS];
 	
 	Image = I.data;
 	float Mask [] = { 1.0,   4.0,  67.0,  4.0,  1.0,
@@ -107,30 +134,34 @@ int main() {
 	
 	cv::Mat A(HEIGHT, WIDTH, CV_8UC3, Image_out);
 	// cv::cvtColor(A, A, cv::COLOR_BGR2RGB);
-	cv::imshow("Result of gaussian blur", A);
+	cv::imshow("Result of gaussian blur (host)", A);
 	cv::waitKey(0);
-	
-	print5by5(Image_out);
 
 	// -------------------------------------------------------------------------
 	// DEVICE MEMORY ALLOCATION
-	/*
-	SAFE_CALL( cudaMalloc( &devImage, WIDTH * HEIGHT * CHANNELS * sizeof(int) ) );
-	SAFE_CALL( cudaMalloc( &devMask, N * N * sizeof(int) ) );
-
-
-	SAFE_CALL( cudaMemcpy( devImage, Image, WIDTH * HEIGHT * CHANNELS * sizeof(int), cudaMemcpyHostToDevice ) );
-	SAFE_CALL( cudaMemcpy( devIMask, Mask, N * N * sizeof(int), cudaMemcpyHostToDevice ) );
-	*/
+	
+	unsigned char *devImage, *devImage_out;
+	float *devMask;
+	
+	SAFE_CALL( cudaMalloc( &devImage, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char) ) );
+	SAFE_CALL( cudaMalloc( &devImage_out, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char) ) );
+	SAFE_CALL( cudaMalloc( &devMask, N * N * sizeof(float) ) );
+	
 	// -------------------------------------------------------------------------
 	// COPY DATA FROM HOST TO DEVICE
-	// SAFE_CALL();
+	
+	SAFE_CALL( cudaMemcpy( devImage, Image, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char), cudaMemcpyHostToDevice ) );
+	SAFE_CALL( cudaMemcpy( devMask, Mask, N * N * sizeof(float), cudaMemcpyHostToDevice ) );
 
 	// -------------------------------------------------------------------------
 	// DEVICE EXECUTION
+	
+	dim3 block_size( BLOCK_SIZE, BLOCK_SIZE, 1 );
+  dim3 num_blocks( ceil(float(WIDTH)/BLOCK_SIZE), ceil(float(HEIGHT)/BLOCK_SIZE), 1 );
+	
 	TM_device.start();
 
-	/// GaussianBlurDevice<<<  >>>();
+	GaussianBlurDevice<<<block_size, num_blocks>>>(devImage, devMask, devImage_out, N);
 
 	TM_device.stop();
 	CHECK_CUDA_ERROR
@@ -143,9 +174,16 @@ int main() {
 	// -------------------------------------------------------------------------
 	// COPY DATA FROM DEVICE TO HOST
 
+	SAFE_CALL( cudaMemcpy( hostImage_out, devImage_out, N * N * sizeof(unsigned char), cudaMemcpyDeviceToHost ) );
 
 	// -------------------------------------------------------------------------
 	// RESULT CHECK
+	
+	cv::Mat B(HEIGHT, WIDTH, CV_8UC3, hostImage_out);
+	// cv::cvtColor(A, A, cv::COLOR_BGR2RGB);
+	cv::imshow("Result of gaussian blur (device)", B);
+	cv::waitKey(0);
+	
 	if (true /* Correct check here */) {
 	std::cerr << "wrong result!" << std::endl;
 	cudaDeviceReset();
@@ -155,11 +193,16 @@ int main() {
 
 	// -------------------------------------------------------------------------
 	// HOST MEMORY DEALLOCATION
+  delete[] Image;
+  delete[] Image_out;
+  delete[] hostImage_out;
 
 
 	// -------------------------------------------------------------------------
 	// DEVICE MEMORY DEALLOCATION
-
+	SAFE_CALL( cudaFree( devImage ) )
+  SAFE_CALL( cudaFree( devImage_out ) )
+  SAFE_CALL( cudaFree( devMask ) )
 
 	// -------------------------------------------------------------------------
 	//SAFE_CALL(cudaFree());
