@@ -5,13 +5,13 @@
 #include "Timer.cuh"
 #include "CheckError.cuh"
 #include <opencv2/opencv.hpp>
-// #include <imgcodecs.hpp> 
+
 using namespace timer;
 
 // N is the mask width / height (square mask)
 const int N = 5;
-#define WIDTH 1000
-#define HEIGHT 500
+#define WIDTH 4000
+#define HEIGHT 2000
 #define CHANNELS 3
 
 const int BLOCK_SIZE_1D = 1024;
@@ -117,14 +117,14 @@ void GaussianBlurHost(const unsigned char *image, const float *mask, unsigned ch
 	}
 }
 
-int main() {
+int main() {{
 	Timer<DEVICE> TM_device;
 	Timer<HOST>   TM_host;
 
 	// -------------------------------------------------------------------------
 	// READ INPUT IMAGE
-	cv::Mat I = cv::imread("../prova_resized.jpg");
-	//cv::Mat I = cv::imread("../image.png");
+	// cv::Mat I = cv::imread("../prova_resized.jpg");
+	cv::Mat I = cv::imread("../image.png");
 	
 	if (I.empty())
 	{
@@ -197,13 +197,13 @@ int main() {
 	
 	TM_device.start();
 
-	// GaussianBlurDevice<<<block_size, num_blocks>>>(devImage, devMask, devImage_out, N);
-	
-	GaussianBlurDevice1Dhorizontal <<< block_size_1D, num_blocks_1D >>> 
+	GaussianBlurDevice<<< num_blocks, block_size >>>(devImage, devMask, devImage_out, N);
+	/*
+	GaussianBlurDevice1Dhorizontal <<< num_blocks_1D, block_size_1D >>> 
 	(devImage, devImage_inter, devMask1D, N);
-	GaussianBlurDevice1Dvertical <<< block_size_1D, num_blocks_1D >>> 
+	GaussianBlurDevice1Dvertical <<< num_blocks_1D, block_size_1D >>> 
 	(devImage_inter, devImage_out, devMask1D, N);
-	
+	*/
 	TM_device.stop();
 	
 	CHECK_CUDA_ERROR
@@ -258,7 +258,7 @@ int main() {
 
 	// -------------------------------------------------------------------------
 	//SAFE_CALL(cudaFree());
-	cudaDeviceReset();
+	} cudaDeviceReset();
 }
 
 template <class T>
