@@ -9,11 +9,12 @@
 using namespace timer;
 
 // N is the mask width / height (square mask)
-const int N = 17;
+const int N = 5;
 #define WIDTH 1000
 #define HEIGHT 500
 #define CHANNELS 3
 
+const int BLOCK_SIZE_1D = 1024;
 const int BLOCK_SIZE = 32;
 const int TILE_WIDTH = BLOCK_SIZE;
 
@@ -22,12 +23,47 @@ template <class T>
 void printNbyN (T* Image, int N, int width, int channels);
 // create a Mask NxN given a certain weight sigma 
 void createMask (float* Mask, int N, float sigma);
+void createMask1D (float* Mask, int N, float sigma);
+
+// 
+__global__
+void GaussianBlurDevice1Dhorizontal(const unsigned char *image, float *image_out, const float *mask, int N) {
+
+  int globalId_x = (threadIdx.x + blockDim.x * blockIdx.x) % WIDTH;
+  int globalId_y = (threadIdx.x + blockDim.x * blockIdx.x) / WIDTH;
+
+  if ((threadIdx.x + blockDim.x * blockIdx.x) < (WIDTH * HEIGHT)) {
+      for(int channel = 0; channel < CHANNELS; channel++) {
+          float pixel_value = 0;
+          for(int u = 0; u < N; u++) {
+              int new_x = min(WIDTH, max(0, globalId_x+u-N/2));
+              pixel_value += mask[u]*image[(globalId_y*WIDTH+new_x)*CHANNELS+channel];
+          }
+          image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]= pixel_value ;
+      }
+  }
+}
 
 __global__
-void GaussianBlurDevice(const unsigned char *image, 
-												const float *mask, 
-												unsigned char *image_out,
-												int N) {
+void GaussianBlurDevice1Dvertical(const float *image, unsigned char *image_out, const float *mask, int N) {
+
+  int globalId_x = (threadIdx.x + blockDim.x * blockIdx.x) % WIDTH;
+  int globalId_y = (threadIdx.x + blockDim.x * blockIdx.x) / WIDTH;
+
+  if ((threadIdx.x + blockDim.x * blockIdx.x) < (WIDTH * HEIGHT)) {
+      for(int channel = 0; channel < CHANNELS; channel++) {
+          float pixel_value = 0;
+          for(int u = 0; u < N; u++) {
+						int new_y = min(HEIGHT, max(0, globalId_y+u-N/2));
+						pixel_value += mask[u]*image[(new_y*WIDTH+globalId_x)*CHANNELS+channel];
+          }
+          image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]=(unsigned char) pixel_value ;
+      }
+  }
+}
+
+__global__
+void GaussianBlurDevice(const unsigned char *image, const float *mask, unsigned char *image_out, int N) {
 
 	int globalId_x = threadIdx.x + blockIdx.x * blockDim.x;
 	int globalId_y = threadIdx.y + blockIdx.y * blockDim.y;
@@ -55,9 +91,7 @@ void GaussianBlurDevice(const unsigned char *image,
 	}
 }
 
-void GaussianBlurHost(const unsigned char *image, 
-											const float *mask, 
-											unsigned char *image_out) {
+void GaussianBlurHost(const unsigned char *image, const float *mask, unsigned char *image_out) {
 
 	for(int y = 0; y < HEIGHT; y++) {
 		for(int x = 0; x < WIDTH; x++) {
@@ -99,8 +133,7 @@ int main() {
 		// stop execution
 	}
 
-	cv::namedWindow("Display window");// Create a window for display.
-	cv::imshow( "Display window", I ); 
+	cv::imshow( "Initial image", I ); 
 	cv::waitKey(0);
 
 	// -------------------------------------------------------------------------
@@ -110,19 +143,14 @@ int main() {
 	unsigned char *hostImage_out = new unsigned char[WIDTH * HEIGHT * CHANNELS];
 	float sigma;
 	float *Mask = new float[N*N]; 
+	float *Mask1D = new float[N];
 	
 	Image = I.data;
-	sigma = 3.0;
-	/*
-	float Mask [] = { 1.0,   4.0,  67.0,  4.0,  1.0,
-       						  4.0,  16.0,  26.0, 16.0,  4.0,
-       						  7.0,  26.0,  41.0, 26.0,  7.0,
-       						  4.0,  16.0,  26.0, 16.0,  4.0,
-       						  1.0,   4.0,  67.0,  4.0,  1.0 };
-  */   						  
+	sigma = 3.0; 						  
   createMask(Mask, N, sigma);  
+  createMask1D(Mask1D, N, sigma);
   
-  // printNbyN(Mask, N, N, 1);
+  printNbyN(Mask, N, N, 1);
 	
 	// -------------------------------------------------------------------------
 	// HOST EXECUTIION
@@ -133,38 +161,51 @@ int main() {
 	TM_host.stop();
 	TM_host.print("GaussianBlur host:   ");
 	
+	printNbyN(Image_out, 5, WIDTH, CHANNELS);
+	
 	cv::Mat A(HEIGHT, WIDTH, CV_8UC3, Image_out);
 	// cv::cvtColor(A, A, cv::COLOR_BGR2RGB);
 	cv::imshow("Result of gaussian blur (host)", A);
 	cv::waitKey(0);
-
+	
 	// -------------------------------------------------------------------------
 	// DEVICE MEMORY ALLOCATION
 	
 	unsigned char *devImage, *devImage_out;
-	float *devMask;
+	float *devImage_inter, *devMask, *devMask1D;
 	
 	SAFE_CALL( cudaMalloc( &devImage, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char) ) );
+	SAFE_CALL( cudaMalloc( &devImage_inter, WIDTH * HEIGHT * CHANNELS * sizeof(float) ) );
 	SAFE_CALL( cudaMalloc( &devImage_out, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char) ) );
 	SAFE_CALL( cudaMalloc( &devMask, N * N * sizeof(float) ) );
+	SAFE_CALL( cudaMalloc( &devMask1D, N * sizeof(float) ) );
 	
 	// -------------------------------------------------------------------------
 	// COPY DATA FROM HOST TO DEVICE
 	
 	SAFE_CALL( cudaMemcpy( devImage, Image, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char), cudaMemcpyHostToDevice ) );
 	SAFE_CALL( cudaMemcpy( devMask, Mask, N * N * sizeof(float), cudaMemcpyHostToDevice ) );
+	SAFE_CALL( cudaMemcpy( devMask1D, Mask1D, N * sizeof(float), cudaMemcpyHostToDevice ) );
 
 	// -------------------------------------------------------------------------
 	// DEVICE EXECUTION
 	
 	dim3 block_size( BLOCK_SIZE, BLOCK_SIZE, 1 );
   dim3 num_blocks( ceil(float(WIDTH)/BLOCK_SIZE), ceil(float(HEIGHT)/BLOCK_SIZE), 1 );
+  dim3 block_size_1D( BLOCK_SIZE_1D, 1, 1);
+  dim3 num_blocks_1D( WIDTH*HEIGHT%BLOCK_SIZE_1D > 0? WIDTH*HEIGHT/BLOCK_SIZE_1D+1 : WIDTH*HEIGHT/BLOCK_SIZE_1D, 1, 1 );
 	
 	TM_device.start();
 
-	GaussianBlurDevice<<<block_size, num_blocks>>>(devImage, devMask, devImage_out, N);
-
+	// GaussianBlurDevice<<<block_size, num_blocks>>>(devImage, devMask, devImage_out, N);
+	
+	GaussianBlurDevice1Dhorizontal <<< block_size_1D, num_blocks_1D >>> 
+	(devImage, devImage_inter, devMask1D, N);
+	GaussianBlurDevice1Dvertical <<< block_size_1D, num_blocks_1D >>> 
+	(devImage_inter, devImage_out, devMask1D, N);
+	
 	TM_device.stop();
+	
 	CHECK_CUDA_ERROR
 	TM_device.print("GaussianBlur device: ");
 
@@ -176,6 +217,7 @@ int main() {
 	// COPY DATA FROM DEVICE TO HOST
 
 	SAFE_CALL( cudaMemcpy( hostImage_out, devImage_out, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char), cudaMemcpyDeviceToHost ) );
+	printNbyN(hostImage_out, 5, WIDTH, CHANNELS);
 
 	// -------------------------------------------------------------------------
 	// RESULT CHECK
@@ -211,6 +253,8 @@ int main() {
 	SAFE_CALL( cudaFree( devImage ) )
   SAFE_CALL( cudaFree( devImage_out ) )
   SAFE_CALL( cudaFree( devMask ) )
+  SAFE_CALL( cudaFree( devMask1D ) )
+  SAFE_CALL( cudaFree( devImage_inter ) )
 
 	// -------------------------------------------------------------------------
 	//SAFE_CALL(cudaFree());
@@ -219,12 +263,13 @@ int main() {
 
 template <class T>
 void printNbyN (T* Image, int N, int width, int channels) {
+	
 	std::cout << std::endl;
 	for(int i=0; i<N; i++) {
 		for(int j=0; j<N; j++) {
 			std::cout << "[ ";
 			for(int k=0; k<channels; k++) {
-				std::cout << Image[(i*width+j)*channels+k];
+				std::cout << (short)Image[(i*width+j)*channels+k];
 				k == channels-1? std::cout << " ": std::cout << " , "; 
 			}
 			std::cout << "]";
@@ -234,21 +279,40 @@ void printNbyN (T* Image, int N, int width, int channels) {
 	std::cout << std::endl;
 }
 
-// Just to calculate the mask
-// sigma 5.5
-void createMask (float* Mask, int N, float sigma) {
-
-	/*
-	for(int i=0; i<N; i++) {
-		for(int j=0; j<N; j++) {
-			Mask[i*N+j] = 1.0/273 * Mask[i*N+j];
-		}
-	}
-	*/
+void createMask (float *Mask, int N, float sigma) {
+	
+	float sum = 0.0;
 	
 	for(int i=0; i<N; i++) {
 		for(int j=0; j<N; j++) {
 			Mask[i*N+j] = 1 / ( 2 * M_PI * pow( sigma, 2 ) ) * exp( -( pow( abs( N / 2 - i ), 2 ) + pow( abs( N / 2 - j ), 2 ) ) / ( 2 * pow( sigma, 2 ) ) );
+			sum += Mask[i*N+j];
 		}
 	}
+	for(int i=0; i<N; i++) {
+		for(int j=0; j<N; j++) {
+			// normalize kernel to avoid darkening of image
+			Mask[i*N+j] = Mask[i*N+j] / sum;
+		}
+	}
+}
+
+void createMask1D (float *Mask, int N, float sigma) {
+
+	float sum = 0.0;
+	
+	for(int j=0; j<N; j++) {
+		Mask[j] = 1 / ( sqrt(2 * M_PI) * sigma ) * exp( -( pow( abs( N / 2 - j ), 2 ) ) / ( 2 * pow( sigma, 2 ) ) );
+		sum += Mask[j];
+	}
+	
+	std::cout << "1D Mask: [   ";
+	
+	for(int j=0; j<N; j++) {
+		// normalize kernel to avoid darkening of image
+		Mask[j] = Mask[j] / sum;
+		std::cout << Mask[j] << "   ";
+	}
+	
+	std::cout << "]" << std::endl;
 }

@@ -30,6 +30,7 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 
 list(APPEND CUDA_NVCC_FLAGS "-arch=sm_62")
 list(APPEND CUDA_NVCC_FLAGS "-w")
+list(APPEND CUDA_NVCC_FLAGS "-G")
 
 cuda_add_executable(gaussian_blur ${PROJECT_SOURCE_DIR}/GaussianBlur.cu)
 if (EXISTS ${PROJECT_SOURCE_DIR}/../../../opencv/*lib*)
