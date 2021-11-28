@@ -8,13 +8,12 @@
 
 using namespace timer;
 
-// N is the mask width / height (square mask)
-const int N = 5;
 #define WIDTH 4000
 #define HEIGHT 2000
 #define CHANNELS 3
-
-const int BLOCK_SIZE_1D = 1024;
+// N is the mask width / height (square mask)
+const int N = 5;
+const int BLOCK_SIZE_1D = 128;
 const int BLOCK_SIZE = 32;
 const int TILE_WIDTH = BLOCK_SIZE;
 
@@ -27,7 +26,7 @@ void createMask1D (float* Mask, int N, float sigma);
 
 // 
 __global__
-void GaussianBlurDevice1Dhorizontal(const unsigned char *image, float *image_out, const float *mask, int N) {
+void GaussianBlurDevice1Dhorizontal(const unsigned char *image, float *image_out, const float *mask, const int N) {
 
   int globalId_x = (threadIdx.x + blockDim.x * blockIdx.x) % WIDTH;
   int globalId_y = (threadIdx.x + blockDim.x * blockIdx.x) / WIDTH;
@@ -45,7 +44,7 @@ void GaussianBlurDevice1Dhorizontal(const unsigned char *image, float *image_out
 }
 
 __global__
-void GaussianBlurDevice1Dvertical(const float *image, unsigned char *image_out, const float *mask, int N) {
+void GaussianBlurDevice1Dvertical(const float *image, unsigned char *image_out, const float *mask, const int N) {
 
   int globalId_x = (threadIdx.x + blockDim.x * blockIdx.x) % WIDTH;
   int globalId_y = (threadIdx.x + blockDim.x * blockIdx.x) / WIDTH;
@@ -56,6 +55,62 @@ void GaussianBlurDevice1Dvertical(const float *image, unsigned char *image_out, 
           for(int u = 0; u < N; u++) {
 						int new_y = min(HEIGHT, max(0, globalId_y+u-N/2));
 						pixel_value += mask[u]*image[(new_y*WIDTH+globalId_x)*CHANNELS+channel];
+          }
+          image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]=(unsigned char) pixel_value ;
+      }
+  }
+}
+
+__global__
+void GaussianBlurDevice1DhorizontalSH(const unsigned char *image, float *image_out, const float *mask) {
+
+	__shared__ float mask_sh[N];
+	//__shared__ unsigned char tile_sh[(BLOCK_SIZE_1D + N / 2 * 2) * CHANNELS];
+
+  int globalId_x = (threadIdx.x + blockDim.x * blockIdx.x) % WIDTH;
+  int globalId_y = (threadIdx.x + blockDim.x * blockIdx.x) / WIDTH;
+  
+  if (threadIdx.x < N) {
+  	mask_sh[threadIdx.x] = mask[threadIdx.x];
+  }
+  
+  /*
+  for (int channel = 0; channel < N; channel++) {
+  	tile_sh[(threadIdx.x+N/2)*CHANNELS+channel] = image[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel];
+  }
+	*/
+	__syncthreads();
+
+  if ((threadIdx.x + blockDim.x * blockIdx.x) < (WIDTH * HEIGHT)) {
+      for(int channel = 0; channel < CHANNELS; channel++) {
+          float pixel_value = 0;
+          for(int u = 0; u < N; u++) {
+              int new_x = min(WIDTH, max(0, globalId_x+u-N/2));
+              pixel_value += mask_sh[u]*image[(globalId_y*WIDTH+new_x)*CHANNELS+channel];
+          }
+          image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]= pixel_value;
+      }
+  }
+}
+
+__global__
+void GaussianBlurDevice1DverticalSH(const float *image, unsigned char *image_out, const float *mask) {
+
+	__shared__ float mask_sh[N];
+
+  int globalId_x = (threadIdx.x + blockDim.x * blockIdx.x) % WIDTH;
+  int globalId_y = (threadIdx.x + blockDim.x * blockIdx.x) / WIDTH;
+  
+  if (threadIdx.x < N) {
+  	mask_sh[threadIdx.x] = mask[threadIdx.x];
+  }
+
+  if ((threadIdx.x + blockDim.x * blockIdx.x) < (WIDTH * HEIGHT)) {
+      for(int channel = 0; channel < CHANNELS; channel++) {
+          float pixel_value = 0;
+          for(int u = 0; u < N; u++) {
+						int new_y = min(HEIGHT, max(0, globalId_y+u-N/2));
+						pixel_value += mask_sh[u]*image[(new_y*WIDTH+globalId_x)*CHANNELS+channel];
           }
           image_out[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel]=(unsigned char) pixel_value ;
       }
@@ -150,7 +205,7 @@ int main() {{
   createMask(Mask, N, sigma);  
   createMask1D(Mask1D, N, sigma);
   
-  printNbyN(Mask, N, N, 1);
+  // printNbyN(Mask, N, N, 1);
 	
 	// -------------------------------------------------------------------------
 	// HOST EXECUTIION
@@ -161,7 +216,7 @@ int main() {{
 	TM_host.stop();
 	TM_host.print("GaussianBlur host:   ");
 	
-	printNbyN(Image_out, 5, WIDTH, CHANNELS);
+	// printNbyN(Image_out, 5, WIDTH, CHANNELS);
 	
 	cv::Mat A(HEIGHT, WIDTH, CV_8UC3, Image_out);
 	// cv::cvtColor(A, A, cv::COLOR_BGR2RGB);
@@ -197,13 +252,18 @@ int main() {{
 	
 	TM_device.start();
 
-	GaussianBlurDevice<<< num_blocks, block_size >>>(devImage, devMask, devImage_out, N);
+	// GaussianBlurDevice<<< num_blocks, block_size >>>(devImage, devMask, devImage_out, N);
 	/*
 	GaussianBlurDevice1Dhorizontal <<< num_blocks_1D, block_size_1D >>> 
 	(devImage, devImage_inter, devMask1D, N);
 	GaussianBlurDevice1Dvertical <<< num_blocks_1D, block_size_1D >>> 
 	(devImage_inter, devImage_out, devMask1D, N);
 	*/
+	GaussianBlurDevice1DhorizontalSH <<< num_blocks_1D, block_size_1D >>> 
+	(devImage, devImage_inter, devMask1D);
+	GaussianBlurDevice1DverticalSH <<< num_blocks_1D, block_size_1D >>> 
+	(devImage_inter, devImage_out, devMask1D);
+	
 	TM_device.stop();
 	
 	CHECK_CUDA_ERROR
@@ -217,7 +277,7 @@ int main() {{
 	// COPY DATA FROM DEVICE TO HOST
 
 	SAFE_CALL( cudaMemcpy( hostImage_out, devImage_out, WIDTH * HEIGHT * CHANNELS * sizeof(unsigned char), cudaMemcpyDeviceToHost ) );
-	printNbyN(hostImage_out, 5, WIDTH, CHANNELS);
+	// printNbyN(hostImage_out, 5, WIDTH, CHANNELS);
 
 	// -------------------------------------------------------------------------
 	// RESULT CHECK
