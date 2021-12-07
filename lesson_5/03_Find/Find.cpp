@@ -39,13 +39,18 @@ int main() {
     std::cout << index << std::endl;
 
     // ------------ PARALLEL SEARCH --------------------------------------------
+    
+    // my solution
+    
     TM.start();
 
     index = -1;
     bool flag = true;
-    #pragma omp parallel shared (index, flag)
-    for (int i = 0; i < N - 1 && flag; ++i) {
-        if (Array[i] == to_find1 && Array[i + 1] == to_find2) {
+    int i;
+
+    #pragma omp parallel for shared (index, flag) private(i)
+    for (i = 0; i < N - 1; ++i) {
+        if (Array[i] == to_find1 && Array[i + 1] == to_find2 && flag) {
             index = i;
             // i=N;            
             flag = false;
@@ -53,19 +58,39 @@ int main() {
     }
 
     TM.stop();
-    
+
     /*
+    // Other working solution
     TM.start();
 
     index = -1;
-    #pragma omp parallel sfor
-    for (int i = 0; i < N - 1; ++i) {
+    int i;
+    
+    #pragma omp parallel for shared (index) private(i)
+    for (i = 0; i < N - 1; ++i) {
         if (Array[i] == to_find1 && Array[i + 1] == to_find2) {
             index = i;
             i=N;
         }
     }
-    
+
+    TM.stop();
+    */
+
+    /*
+    // uploaded solution
+    TM.start();
+
+    index = -1;
+    bool flag = true;
+    #pragma omp parallel for firstprivate(flag) shared(index)
+    for (int i = 0; i < N - 1; ++i) {
+        if (flag && Array[i] == to_find1 && Array[i + 1] == to_find2) {
+            index = i;                        // index: concurrent value
+            flag = false;
+        }
+    }
+
     TM.stop();
     */
 

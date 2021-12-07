@@ -16,10 +16,10 @@ void sequentialMatrixMatrixMul(int** A, int** B, int** C) {
 void openmpMatrixMatrixMul(int** A, int** B, int** C) {
 	int row, col, sum, k;
 	# pragma omp parallel for private(row, col, sum, k)
-	for (int row = 0; row < ROWS; ++row) {
-		for (int col = 0; col < COLS; ++col) {
-			int sum = 0;
-			for (int k = 0; k < COLS; ++k)
+	for (row = 0; row < ROWS; ++row) {
+		for (col = 0; col < COLS; ++col) {
+			sum = 0;
+			for (k = 0; k < COLS; ++k)
 				sum += A[row][k] * B[k][col];
 			C[row][col] = sum;
 		}

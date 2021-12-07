@@ -45,25 +45,27 @@ int main() {
     // ----------------- Matrix Multiplication Sequential ----------------------
     std::cout << std::endl << "Starting Sequential Mult....";
     Timer<HOST> TM;
+
     TM.start();
-
     sequentialMatrixMatrixMul(A, B, C_seq);
-
     TM.stop();
+
+    float time_seq = TM.duration();
     std::cout << "done!" << std::endl<< std::endl;
     TM.print("Sequential Matrix-Matrix Multiplication");
 
     // ----------------- Matrix Multiplication OPENMP --------------------------
     std::cout << std::endl << "Starting Parallel Mult....";
+
     TM.start();
-
     openmpMatrixMatrixMul(A, B, C_par);
-
     TM.stop();
+
+    float time_OMP = TM.duration();
     std::cout << "done!" << std::endl<< std::endl;
     TM.print("OpenMP Matrix-Matrix Multiplication");
 
-    
+    std::cout << "Speedup: " << time_seq/time_OMP << "x" << std::endl;
     // =========================================================================
     // ----------------- Check the results (C_seq = C_par) ----------------------
     
