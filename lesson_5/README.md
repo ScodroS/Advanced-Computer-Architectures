@@ -39,8 +39,14 @@ CPU time   | Parallel time | Speedup  | Device             | Mode  | Author
 <img src="https://github.com/PARCO-LAB/Advanced-Computer-Architectures/blob/main/figures/l5_04.jpg" width="500" height=auto> 
 
 ### Performance reference table (N = 256):
+## The biggest part of the computation consists in swapping elements of the array S. This is a critical part of the process
+## so I have included it inside a omp critical region. Unfortunately this badly affects the performance, that is decreasing
+## with bigger amounts of threads (due to the overhead when accessing the critical region of code of the cracking part).
 
-CPU time   | Parallel time | Speedup  | Device             | Mode  |Author
------------| ------------- | -------- | ------------------ | ----- |------
-72146 ms   | 63231 ms      | 1.13x    | Nvidia Jetson TX2  | OpenMP| -
-  | - |  | Ryzen 3700x  | OpenMP | ScodroS
+CPU time   | Parallel time | Speedup  | Device             | Mode               |Author
+-----------| ------------- | -------- | ------------------ | ------------------ |------
+72146 ms   | 63231 ms      | 1.13x    | Nvidia Jetson TX2  | OpenMP             | -
+19818 ms   | 20390 ms      | 0.97x    | Ryzen 3700x        | OpenMP (2 threads) | ScodroS
+19727 ms   | 21767 ms      | 0.91x    | Ryzen 3700x        | OpenMP (4 threads) | ScodroS
+19685 ms   | 24837 ms      | 0.79x    | Ryzen 3700x        | OpenMP (8 threads) | ScodroS
+19706 ms   | 28667 ms      | 0.69x    | Ryzen 3700x        | OpenMP (16 threads)| ScodroS

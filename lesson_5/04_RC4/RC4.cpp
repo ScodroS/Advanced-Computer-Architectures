@@ -70,8 +70,6 @@ int main() {
 
     // SEQ EXECUTION ----------------------------------------------------------------------
 
-    
-
     key_scheduling_alg(S, key, key_length);
     pseudo_random_gen(S, stream, key_length);
 
@@ -123,24 +121,25 @@ int main() {
         std::cout << " <> CORRECT\n\n";
 
     // OMP EXECUTION ----------------------------------------------------------------------
+    unsigned char stream_omp[key_length];
     bool find = false;
 
     std::cout << "\nParallel Execution\n";
     
     key_scheduling_alg(S, key, key_length);
-    pseudo_random_gen(S, stream, key_length);
+    pseudo_random_gen(S, stream_omp, key_length);
 
-    print_hex(stream, key_length, "PRGA Stream:");
+    print_hex(stream_omp, key_length, "PRGA Stream:");
 
     for (int i = 0; i < key_length; ++i)
-        stream[i] = stream[i] ^ Plaintext[i];        // XOR
+        stream_omp[i] = stream_omp[i] ^ Plaintext[i];        // XOR
     
     for(int i = 0; i < 256; i++) {
         S[i] = S_copy[i];
     }
 
-    print_hex(stream, key_length, "XOR:");
-    if (chech_hex(cipher_text, stream, key_length))
+    print_hex(stream_omp, key_length, "XOR:");
+    if (chech_hex(cipher_text, stream_omp, key_length))
         std::cout << "\n\ncheck ok!\n";
     std::cout << "Cracking..." << std::endl;
 
@@ -152,21 +151,23 @@ int main() {
     find = false;
     int i, k;
 
+    // More threads = more overhead
     TM.start();
-    # pragma omp parallel for shared(find)
-    for (k = 0; k < (1<<24); ++k) {
+    # pragma omp parallel for private(i, k) shared(find) num_threads(16) schedule(auto)
+    // for (k = 0; k < (1<<24); ++k) {
+    for (k = 0; k < (1<<24); ++k) { 
         if (!find) {
             # pragma omp critical
             {
                 key_scheduling_alg(S, key, key_length);
-                pseudo_random_gen(S, stream, key_length);
+                pseudo_random_gen(S, stream_omp, key_length);
             }
 
             for (i = 0; i < key_length; ++i)
-                stream[i] = stream[i] ^ Plaintext[i];        // XOR
+                stream_omp[i] = stream_omp[i] ^ Plaintext[i];        // XOR
 
-            if (chech_hex(cipher_text, stream, key_length)) {
-                find=true;
+            if (chech_hex(cipher_text, stream_omp, key_length)) {
+                find = true;
             }
             int next = 0;
             while (key[next] == 255) {
