@@ -134,6 +134,7 @@ int main() {
     for (int i = 0; i < key_length; ++i)
         stream_omp[i] = stream_omp[i] ^ Plaintext[i];        // XOR
     
+    // Just to be sure to restart with original S
     for(int i = 0; i < 256; i++) {
         S[i] = S_copy[i];
     }

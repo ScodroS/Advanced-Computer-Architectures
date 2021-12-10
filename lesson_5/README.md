@@ -14,7 +14,7 @@ CPU time   | Parallel time | Speedup  | Device             | Mode             |A
 ## 02. Factorial
 
 ### Performance reference table (N = 268435456):
-# anomaly detected in the results of my solution
+ anomaly detected in the results of my solution
 
 CPU time   | Parallel time | Speedup  | Device             | Mode  | Author
 -----------| ------------- | -------- | ------------------ | ----- | ------
@@ -26,8 +26,8 @@ CPU time   | Parallel time | Speedup  | Device             | Mode  | Author
 Find two (given) consecutive numbers in an array.
 
 ### Performance reference table (N = 67108864):
-## I'm considering the case where consecutive numbers are NOT found (which is the case where OMP parallelization works best!) so index = -1.
-## Index is not always the same in sequential and parallel executions (depends on which thread finds the 2 consecutive elements first).
+ I'm considering the case where consecutive numbers are NOT found (which is the case where OMP parallelization works best!) so index = -1.
+ Index is not always the same in sequential and parallel executions (depends on which thread finds the 2 consecutive elements first).
 
 CPU time   | Parallel time | Speedup  | Device             | Mode  | Author
 -----------| ------------- | -------- | ------------------ | ----  | ------
@@ -39,9 +39,9 @@ CPU time   | Parallel time | Speedup  | Device             | Mode  | Author
 <img src="https://github.com/PARCO-LAB/Advanced-Computer-Architectures/blob/main/figures/l5_04.jpg" width="500" height=auto> 
 
 ### Performance reference table (N = 256):
-## The biggest part of the computation consists in swapping elements of the array S. This is a critical part of the process
-## so I have included it inside a omp critical region. Unfortunately this badly affects the performance, that is decreasing
-## with bigger amounts of threads (due to the overhead when accessing the critical region of code of the cracking part).
+ The biggest part of the computation consists in swapping elements of the array S. This is a critical part of the process
+ so I have included it inside a omp critical region. Unfortunately this badly affects the performance, that is decreasing
+ with bigger amounts of threads (due to the overhead when accessing the critical region of code of the cracking part).
 
 CPU time   | Parallel time | Speedup  | Device             | Mode               |Author
 -----------| ------------- | -------- | ------------------ | ------------------ |------
