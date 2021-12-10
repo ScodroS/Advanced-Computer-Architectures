@@ -31,18 +31,63 @@ void quick_sort(int array[], const int start, const int end) {
 void quick_sortOMP(int array[], const int start, const int end) {
     if(start < end) {
         int pivot = partition(array, start, end);
-        #pragma omp task
-				{ quick_sort(array, start, pivot - 1); }
-        #pragma omp task
-        { quick_sort(array, pivot + 1, end); }
+        #pragma parallel
+        {
+            #pragma omp single 
+            { quick_sortOMP(array, start, pivot - 1); }
+            #pragma omp single
+            { quick_sortOMP(array, pivot + 1, end); }
+            
+        }
     }
 }
+
+/*
+void quick_sortOMPtasks(int array[], const int start, const int end) {
+    if(start < end) {
+        int pivot = partition(array, start, end);
+        #pragma omp parallel
+        {
+            #pragma omp single
+            {
+                #pragma omp task shared(array)
+                quick_sortOMPtasks(array, start, pivot - 1);
+                #pragma omp task shared(array)
+                quick_sortOMPtasks(array, pivot + 1, end);
+            }
+        }
+    }
+}
+*/
+void quick_sortOMPtasks(int array[], const int start, const int end) {
+    if(start < end) {
+        int pivot = partition(array, start, end);
+        #pragma omp task shared(array)
+        quick_sortOMPtasks(array, start, pivot - 1);
+        #pragma omp task shared(array)
+        quick_sortOMPtasks(array, pivot + 1, end);
+    }
+}
+
+void quick_sortOMPsections(int array[], const int start, const int end) {
+    if(start < end) {
+        int pivot = partition(array, start, end);
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            { quick_sortOMPsections(array, start, pivot - 1); } 
+            #pragma omp section
+            { quick_sortOMPsections(array, pivot + 1, end); }
+        }
+    }
+}
+
 
 template<typename T>
 void print_array(T* array, int size, const char* str) {
     std::cout << str << "\n";
     //for (int i = 0; i < size; ++i)
-    for (int i = 0; i < 100; ++i)
+    for (int i = size - 100; i < size; ++i)
         std::cout << array[i] << ' ';
     std::cout << "\n" << std::endl;
 }
@@ -50,7 +95,7 @@ void print_array(T* array, int size, const char* str) {
 
 int main() {
 
-		using namespace timer;
+	using namespace timer;
     const int N = 1<<20;
     Timer<HOST> TM;
 
@@ -67,19 +112,19 @@ int main() {
 
     print_array(inputOMP, N, "\nInput:");
 
-		TM.start();
-    quick_sortOMP(inputOMP, 0, N - 1);
-		TM.stop();
-		float time_OMP = TM.duration();
+	TM.start();
+    quick_sortOMPsections(inputOMP, 0, N - 1);
+	TM.stop();
+	float time_OMP = TM.duration();
 
     print_array(inputOMP, N, "Sorted:");
 
     print_array(input, N, "\nInput:");
 
-		TM.start();
+	TM.start();
     quick_sort(input, 0, N - 1);
    	TM.stop();
-		float time_seq = TM.duration();
+	float time_seq = TM.duration();
 
     print_array(input, N, "Sorted:");
     
