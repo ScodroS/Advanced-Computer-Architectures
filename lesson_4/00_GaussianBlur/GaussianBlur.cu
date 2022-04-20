@@ -79,7 +79,7 @@ void GaussianBlurDevice1DhorizontalSH(const unsigned char *image, float *image_o
   	tile_sh[(threadIdx.x+N/2)*CHANNELS+channel] = image[(globalId_y*WIDTH+globalId_x)*CHANNELS+channel];
   }
 	*/
-	__syncthreads();
+  __syncthreads();
 
   if ((threadIdx.x + blockDim.x * blockIdx.x) < (WIDTH * HEIGHT)) {
       for(int channel = 0; channel < CHANNELS; channel++) {
@@ -104,6 +104,8 @@ void GaussianBlurDevice1DverticalSH(const float *image, unsigned char *image_out
   if (threadIdx.x < N) {
   	mask_sh[threadIdx.x] = mask[threadIdx.x];
   }
+	
+  __syncthreads();
 
   if ((threadIdx.x + blockDim.x * blockIdx.x) < (WIDTH * HEIGHT)) {
       for(int channel = 0; channel < CHANNELS; channel++) {
